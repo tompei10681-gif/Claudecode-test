@@ -576,15 +576,24 @@ struct MainView: View {
         }
     }
 
+    private var markedDates: Set<String> {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        let cal = Calendar.current
+        let mc = cal.dateComponents([.year, .month], from: month)
+        return Set(store.entries.filter {
+            let ec = cal.dateComponents([.year, .month], from: $0.date)
+            return ec.year == mc.year && ec.month == mc.month
+        }.map { df.string(from: $0.date) })
+    }
+
     private var sidebar: some View {
         List(selection: $selected) {
             Section {
-                let df = DateFormatter()
-                let _ = { df.dateFormat = "yyyy-MM-dd" }()
                 MiniCalendar(
                     month: $month,
                     selected: $selectedDate,
-                    marked: Set(store.entries(for: month).map { df.string(from: $0.date) })
+                    marked: markedDates
                 )
                 .listRowInsets(EdgeInsets(top: 6, leading: 6, bottom: 6, trailing: 6))
                 .listRowBackground(Color.clear)
