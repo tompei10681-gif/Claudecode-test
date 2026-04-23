@@ -15,16 +15,19 @@ struct HandwritingCanvasView: UIViewRepresentable {
         canvas.isOpaque = false
         canvas.alwaysBounceVertical = true
 
-        if isEditable {
-            let picker = PKToolPicker()
-            picker.setVisible(true, forFirstResponder: canvas)
-            picker.addObserver(canvas)
-            context.coordinator.toolPicker = picker
-            canvas.becomeFirstResponder()
-        }
-
         if let data = drawingData, let drawing = try? PKDrawing(data: data) {
             canvas.drawing = drawing
+        }
+
+        if isEditable {
+            let picker = PKToolPicker()
+            context.coordinator.toolPicker = picker
+            picker.addObserver(canvas)
+            // Defer until view is in the hierarchy
+            DispatchQueue.main.async {
+                picker.setVisible(true, forFirstResponder: canvas)
+                canvas.becomeFirstResponder()
+            }
         }
         return canvas
     }
@@ -51,64 +54,58 @@ struct HandwritingCanvasView: UIViewRepresentable {
     }
 }
 
+// Use a single Canvas view for all backgrounds to avoid SwiftUI type-mismatch errors
 struct PageRulingView: View {
     let background: DiaryEntry.PageBackground
     private let lineColor = Color(.systemGray4)
 
     var body: some View {
-        GeometryReader { geo in
+        Canvas { ctx, size in
             switch background {
             case .plain:
-                Color.clear
+                break
+
             case .ruled:
-                ruledLines(geo)
+                let spacing: CGFloat = 36
+                let count = Int(size.height / spacing) + 2
+                for i in 0..<count {
+                    let y = CGFloat(i) * spacing + spacing
+                    var path = Path()
+                    path.move(to: CGPoint(x: 48, y: y))
+                    path.addLine(to: CGPoint(x: size.width - 16, y: y))
+                    ctx.stroke(path, with: .color(lineColor), lineWidth: 0.5)
+                }
+
             case .grid:
-                gridLines(geo)
+                let sp: CGFloat = 28
+                let cols = Int(size.width / sp) + 2
+                let rows = Int(size.height / sp) + 2
+                for i in 0..<cols {
+                    var p = Path()
+                    p.move(to: CGPoint(x: CGFloat(i) * sp, y: 0))
+                    p.addLine(to: CGPoint(x: CGFloat(i) * sp, y: size.height))
+                    ctx.stroke(p, with: .color(lineColor), lineWidth: 0.5)
+                }
+                for j in 0..<rows {
+                    var p = Path()
+                    p.move(to: CGPoint(x: 0, y: CGFloat(j) * sp))
+                    p.addLine(to: CGPoint(x: size.width, y: CGFloat(j) * sp))
+                    ctx.stroke(p, with: .color(lineColor), lineWidth: 0.5)
+                }
+
             case .dotted:
-                dottedGrid(geo)
-            }
-        }
-    }
-
-    private func ruledLines(_ geo: GeometryProxy) -> some View {
-        let spacing: CGFloat = 36
-        let count = Int(geo.size.height / spacing) + 1
-        return Canvas { ctx, size in
-            for i in 0..<count {
-                let y = CGFloat(i) * spacing + spacing
-                var path = Path()
-                path.move(to: CGPoint(x: 48, y: y))
-                path.addLine(to: CGPoint(x: size.width - 16, y: y))
-                ctx.stroke(path, with: .color(lineColor), lineWidth: 0.5)
-            }
-        }
-    }
-
-    private func gridLines(_ geo: GeometryProxy) -> some View {
-        let sp: CGFloat = 28
-        return Canvas { ctx, size in
-            for i in 0...Int(size.width / sp) {
-                var p = Path()
-                p.move(to: CGPoint(x: CGFloat(i) * sp, y: 0))
-                p.addLine(to: CGPoint(x: CGFloat(i) * sp, y: size.height))
-                ctx.stroke(p, with: .color(lineColor), lineWidth: 0.5)
-            }
-            for j in 0...Int(size.height / sp) {
-                var p = Path()
-                p.move(to: CGPoint(x: 0, y: CGFloat(j) * sp))
-                p.addLine(to: CGPoint(x: size.width, y: CGFloat(j) * sp))
-                ctx.stroke(p, with: .color(lineColor), lineWidth: 0.5)
-            }
-        }
-    }
-
-    private func dottedGrid(_ geo: GeometryProxy) -> some View {
-        let sp: CGFloat = 28
-        return Canvas { ctx, size in
-            for i in 0...Int(size.width / sp) {
-                for j in 0...Int(size.height / sp) {
-                    let rect = CGRect(x: CGFloat(i) * sp - 1, y: CGFloat(j) * sp - 1, width: 2, height: 2)
-                    ctx.fill(Path(ellipseIn: rect), with: .color(lineColor))
+                let sp: CGFloat = 28
+                let cols = Int(size.width / sp) + 2
+                let rows = Int(size.height / sp) + 2
+                for i in 0..<cols {
+                    for j in 0..<rows {
+                        let rect = CGRect(
+                            x: CGFloat(i) * sp - 1,
+                            y: CGFloat(j) * sp - 1,
+                            width: 2, height: 2
+                        )
+                        ctx.fill(Path(ellipseIn: rect), with: .color(lineColor))
+                    }
                 }
             }
         }
